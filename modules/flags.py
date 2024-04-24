@@ -59,12 +59,14 @@ cn_ip = "ImagePrompt"
 cn_ip_face = "FaceSwap"
 cn_canny = "PyraCanny"
 cn_cpds = "CPDS"
+cn_op = "Openpose"
 
-ip_list = [cn_ip, cn_canny, cn_cpds, cn_ip_face]
+ip_list = [cn_ip, cn_canny, cn_cpds, cn_ip_face, cn_op]
 default_ip = cn_ip
 
+# "5"*50 change stop and weight
 default_parameters = {
-    cn_ip: (0.5, 0.6), cn_ip_face: (0.9, 0.75), cn_canny: (0.5, 1.0), cn_cpds: (0.5, 1.0)
+    cn_ip: (0.5, 0.6), cn_ip_face: (0.9, 0.75), cn_canny: (0.5, 1.0), cn_cpds: (0.5, 1.0), cn_op: (0.9, 1.0)
 }  # stop, weight
 
 output_formats = ['png', 'jpeg', 'webp']

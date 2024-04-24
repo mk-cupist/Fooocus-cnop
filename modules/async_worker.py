@@ -193,6 +193,7 @@ def worker():
         inpaint_mask_upload_checkbox = args.pop()
         invert_mask_checkbox = args.pop()
         inpaint_erode_or_dilate = args.pop()
+        inpaint_openpose_checkbox = True
 
         save_metadata_to_images = args.pop() if not args_manager.args.disable_metadata else False
         metadata_scheme = MetadataScheme(args.pop()) if not args_manager.args.disable_metadata else MetadataScheme.FOOOCUS
@@ -334,11 +335,22 @@ def worker():
                     and isinstance(inpaint_input_image, dict):
                 print("#"*50, "INPUT IMAGE 2")
                 inpaint_image = inpaint_input_image['image']
+                cv2.imwrite("./ip_log1.png", inpaint_image)
                 inpaint_mask = inpaint_input_image['mask'][:, :, 0]
+                cv2.imwrite("./ip_log2.png", inpaint_mask)
+
+                if inpaint_openpose_checkbox:
+                    inpaint_pose = inpaint_image
+                    inpaint_pose = resize_image(HWC3(inpaint_pose), width=width, height=height)
+
+                    inpaint_pose = preprocessors.dwpose(inpaint_pose)
+
 
                 if inpaint_mask_upload_checkbox:
+                    print("#"*50, "INPAINT MASK UPLOAD")
                     if isinstance(inpaint_mask_image_upload, np.ndarray):
                         if inpaint_mask_image_upload.ndim == 3:
+                            print("#"*50, "USE INPAINT MASK UPLOADED")
                             H, W, C = inpaint_image.shape
                             inpaint_mask_image_upload = resample_image(inpaint_mask_image_upload, width=W, height=H)
                             inpaint_mask_image_upload = np.mean(inpaint_mask_image_upload, axis=2)
@@ -351,7 +363,9 @@ def worker():
                 if invert_mask_checkbox:
                     inpaint_mask = 255 - inpaint_mask
 
+                cv2.imwrite("./ip_log3.png", inpaint_image)
                 inpaint_image = HWC3(inpaint_image)
+                cv2.imwrite("./ip_log4.png", inpaint_image)
                 if isinstance(inpaint_image, np.ndarray) and isinstance(inpaint_mask, np.ndarray) \
                         and (np.any(inpaint_mask > 127) or len(outpaint_selections) > 0):
                     progressbar(async_task, 1, 'Downloading upscale models ...')
@@ -382,6 +396,8 @@ def worker():
                 print("#"*50, "INPUT IMAGE 3")
                 goals.append('cn')
                 progressbar(async_task, 1, 'Downloading control models ...')
+                if len(cn_tasks[flags.cn_op]) > 0:
+                    controlnet_openpose_path = modules.config.downloading_controlnet_openpose()
                 if len(cn_tasks[flags.cn_canny]) > 0:
                     controlnet_canny_path = modules.config.downloading_controlnet_canny()
                 if len(cn_tasks[flags.cn_cpds]) > 0:
@@ -394,7 +410,7 @@ def worker():
                 progressbar(async_task, 1, 'Loading control models ...')
 
         # Load or unload CNs
-        print("#"*50, "LOAD & UNLOAD", "|", controlnet_openpose_path, controlnet_canny_path, "|", controlnet_cpds_path, "|", clip_vision_path, "|", ip_negative_path, "|", ip_adapter_path, "|", ip_adapter_face_path)
+        print("#"*50, "LOAD & UNLOAD", controlnet_openpose_path, "|", controlnet_canny_path, "|", controlnet_cpds_path, "|", clip_vision_path, "|", ip_negative_path, "|", ip_adapter_path, "|", ip_adapter_face_path)
         pipeline.refresh_controlnets([controlnet_canny_path, controlnet_cpds_path, controlnet_openpose_path])
         ip_adapter.load_ip_adapter(clip_vision_path, ip_negative_path, ip_adapter_path)
         ip_adapter.load_ip_adapter(clip_vision_path, ip_negative_path, ip_adapter_face_path)
@@ -642,6 +658,7 @@ def worker():
             inpaint_worker.current_task = inpaint_worker.InpaintWorker(
                 image=inpaint_image,
                 mask=inpaint_mask,
+                pose=inpaint_pose,
                 use_fill=denoising_strength > 0.99,
                 k=inpaint_respective_field
             )
@@ -654,8 +671,13 @@ def worker():
             progressbar(async_task, 13, 'VAE Inpaint encoding ...')
 
             inpaint_pixel_fill = core.numpy_to_pytorch(inpaint_worker.current_task.interested_fill)
+            cv2.imwrite("./ip_log5.png", inpaint_worker.current_task.interested_fill)
             inpaint_pixel_image = core.numpy_to_pytorch(inpaint_worker.current_task.interested_image)
+            cv2.imwrite("./ip_log6.png", inpaint_worker.current_task.interested_image)
             inpaint_pixel_mask = core.numpy_to_pytorch(inpaint_worker.current_task.interested_mask)
+            cv2.imwrite("./ip_log7.png", inpaint_worker.current_task.interested_mask)
+            inpaint_pixel_pose = core.numpy_to_pytorch(inpaint_worker.current_task.interested_pose)
+            cv2.imwrite("./ip_log_op0.png", inpaint_worker.current_task.interested_mask)
 
             candidate_vae, candidate_vae_swap = pipeline.get_candidate_vae(
                 steps=steps,
@@ -698,21 +720,23 @@ def worker():
             B, C, H, W = latent_fill.shape
             height, width = H * 8, W * 8
             final_height, final_width = inpaint_worker.current_task.image.shape[:2]
+            cv2.imwrite("./ip_log8.png", inpaint_worker.current_task.image)
             print(f'Final resolution is {str((final_height, final_width))}, latent is {str((height, width))}.')
 
-        if 'op' in goals:
-            op_img = inpaint_image
-            op_img = resize_image(HWC3(op_img), width=width, height=height)
-
-            op_img = preprocessors.dwpose(op_img)
-
-            op_img = HWC3(op_img)
-            op_img = core.numpy_to_pytorch(op_img)
-            if debugging_cn_preprocessor:
-                yield_result(async_task, op_img, do_not_show_finished_images=True)
-                return
-
         if 'cn' in goals:
+            for task in cn_tasks[flags.cn_op]:
+                cn_img, cn_stop, cn_weight = task
+                cn_img = resize_image(HWC3(cn_img), width=width, height=height)
+
+                if not skipping_cn_preprocessor:
+                    cn_img = preprocessors.dwpose(cn_img)
+
+                cn_img = HWC3(cn_img)
+                task[0] = core.numpy_to_pytorch(cn_img)
+                if debugging_cn_preprocessor:
+                    yield_result(async_task, cn_img, do_not_show_finished_images=True)
+                    return
+
             for task in cn_tasks[flags.cn_canny]:
                 cn_img, cn_stop, cn_weight = task
                 cv2.imwrite("./log_cn1.png", cn_img)
@@ -801,18 +825,19 @@ def worker():
         final_scheduler_name = scheduler_name
 
         if scheduler_name == 'lcm':
-            final_scheduler_name = 'sgm_uniform'
-            if pipeline.final_unet is not None:
-                pipeline.final_unet = core.opModelSamplingDiscrete.patch(
-                    pipeline.final_unet,
-                    sampling='lcm',
-                    zsnr=False)[0]
-            if pipeline.final_refiner_unet is not None:
-                pipeline.final_refiner_unet = core.opModelSamplingDiscrete.patch(
-                    pipeline.final_refiner_unet,
-                    sampling='lcm',
-                    zsnr=False)[0]
-            print('Using lcm scheduler.')
+            print("#"*50, "LCM!?!?!?!")
+            # final_scheduler_name = 'sgm_uniform'
+            # if pipeline.final_unet is not None:
+            #     pipeline.final_unet = core.opModelSamplingDiscrete.patch(
+            #         pipeline.final_unet,
+            #         sampling='lcm',
+            #         zsnr=False)[0]
+            # if pipeline.final_refiner_unet is not None:
+            #     pipeline.final_refiner_unet = core.opModelSamplingDiscrete.patch(
+            #         pipeline.final_refiner_unet,
+            #         sampling='lcm',
+            #         zsnr=False)[0]
+            # print('Using lcm scheduler.')
 
         async_task.yields.append(['preview', (13, 'Moving model to GPU ...', None)])
 
@@ -831,6 +856,14 @@ def worker():
                 positive_cond, negative_cond = task['c'], task['uc']
 
                 if 'op' in goals:
+                    # cv2.imwrite("./ip_log_op1.png", op_img)
+                    # (a, b, c, d) = inpaint_worker.current_task.get_intereted_area()
+                    # print("#"*50,a,b,c,d)
+                    # op_img = op_img[a:b, c:d]
+                    # cv2.imwrite("./ip_log_op2.png", op_img)
+                    # op_img = HWC3(op_img)
+                    # cv2.imwrite("./ip_log_op3.png", op_img)
+                    # op_img = core.numpy_to_pytorch(op_img)
                     positive_cond, negative_cond = core.apply_controlnet(
                         positive_cond, negative_cond,
                         pipeline.loaded_ControlNets[controlnet_openpose_path], op_img, 0.5, 0, 1
@@ -839,9 +872,10 @@ def worker():
                 if 'cn' in goals:
                     for cn_flag, cn_path in [
                         (flags.cn_canny, controlnet_canny_path),
-                        (flags.cn_cpds, controlnet_cpds_path)
+                        (flags.cn_cpds, controlnet_cpds_path),
+                        (flags.cn_op, controlnet_openpose_path)
                     ]:
-                        print("#"*50, cn_flag)
+                        print("#"*50, cn_flag, cn_path)
                         for cn_img, cn_stop, cn_weight in cn_tasks[cn_flag]:
                             print("#"*50, "CN TASK")
                             print(type(cn_img))

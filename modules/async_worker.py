@@ -302,6 +302,7 @@ def worker():
 
         controlnet_canny_path = None
         controlnet_cpds_path = None
+        controlnet_openpose_path = None
         clip_vision_path, ip_negative_path, ip_adapter_path, ip_adapter_face_path = None, None, None, None
 
         seed = int(image_seed)
@@ -311,9 +312,11 @@ def worker():
         tasks = []
 
         if input_image_checkbox:
+            print("#"*50, "INPUT IMAGE CHECKBOX")
             if (current_tab == 'uov' or (
                     current_tab == 'ip' and mixing_image_prompt_and_vary_upscale)) \
                     and uov_method != flags.disabled and uov_input_image is not None:
+                print("#"*50, "INPUT IMAGE 1")
                 uov_input_image = HWC3(uov_input_image)
                 if 'vary' in uov_method:
                     goals.append('vary')
@@ -329,6 +332,7 @@ def worker():
             if (current_tab == 'inpaint' or (
                     current_tab == 'ip' and mixing_image_prompt_and_inpaint)) \
                     and isinstance(inpaint_input_image, dict):
+                print("#"*50, "INPUT IMAGE 2")
                 inpaint_image = inpaint_input_image['image']
                 inpaint_mask = inpaint_input_image['mask'][:, :, 0]
 
@@ -370,9 +374,12 @@ def worker():
                         else:
                             prompt = inpaint_additional_prompt + '\n' + prompt
                     goals.append('inpaint')
+                    controlnet_openpose_path = modules.config.downloading_controlnet_openpose()
+                    goals.append('op')
             if current_tab == 'ip' or \
                     mixing_image_prompt_and_vary_upscale or \
                     mixing_image_prompt_and_inpaint:
+                print("#"*50, "INPUT IMAGE 3")
                 goals.append('cn')
                 progressbar(async_task, 1, 'Downloading control models ...')
                 if len(cn_tasks[flags.cn_canny]) > 0:
@@ -387,7 +394,8 @@ def worker():
                 progressbar(async_task, 1, 'Loading control models ...')
 
         # Load or unload CNs
-        pipeline.refresh_controlnets([controlnet_canny_path, controlnet_cpds_path])
+        print("#"*50, "LOAD & UNLOAD", "|", controlnet_openpose_path, controlnet_canny_path, "|", controlnet_cpds_path, "|", clip_vision_path, "|", ip_negative_path, "|", ip_adapter_path, "|", ip_adapter_face_path)
+        pipeline.refresh_controlnets([controlnet_canny_path, controlnet_cpds_path, controlnet_openpose_path])
         ip_adapter.load_ip_adapter(clip_vision_path, ip_negative_path, ip_adapter_path)
         ip_adapter.load_ip_adapter(clip_vision_path, ip_negative_path, ip_adapter_face_path)
 
@@ -502,6 +510,7 @@ def worker():
         if len(goals) > 0:
             progressbar(async_task, 13, 'Image processing ...')
 
+        print("#"*50, f"GOALS: {goals}")
         if 'vary' in goals:
             if 'subtle' in uov_method:
                 denoising_strength = 0.5
@@ -602,30 +611,31 @@ def worker():
 
         if 'inpaint' in goals:
             if len(outpaint_selections) > 0:
-                H, W, C = inpaint_image.shape
-                if 'top' in outpaint_selections:
-                    inpaint_image = np.pad(inpaint_image, [[int(H * 0.3), 0], [0, 0], [0, 0]], mode='edge')
-                    inpaint_mask = np.pad(inpaint_mask, [[int(H * 0.3), 0], [0, 0]], mode='constant',
-                                          constant_values=255)
-                if 'bottom' in outpaint_selections:
-                    inpaint_image = np.pad(inpaint_image, [[0, int(H * 0.3)], [0, 0], [0, 0]], mode='edge')
-                    inpaint_mask = np.pad(inpaint_mask, [[0, int(H * 0.3)], [0, 0]], mode='constant',
-                                          constant_values=255)
+                print("#"*50, "OUTPAINT?!?!?!")
+                # H, W, C = inpaint_image.shape
+                # if 'top' in outpaint_selections:
+                #     inpaint_image = np.pad(inpaint_image, [[int(H * 0.3), 0], [0, 0], [0, 0]], mode='edge')
+                #     inpaint_mask = np.pad(inpaint_mask, [[int(H * 0.3), 0], [0, 0]], mode='constant',
+                #                           constant_values=255)
+                # if 'bottom' in outpaint_selections:
+                #     inpaint_image = np.pad(inpaint_image, [[0, int(H * 0.3)], [0, 0], [0, 0]], mode='edge')
+                #     inpaint_mask = np.pad(inpaint_mask, [[0, int(H * 0.3)], [0, 0]], mode='constant',
+                #                           constant_values=255)
 
-                H, W, C = inpaint_image.shape
-                if 'left' in outpaint_selections:
-                    inpaint_image = np.pad(inpaint_image, [[0, 0], [int(W * 0.3), 0], [0, 0]], mode='edge')
-                    inpaint_mask = np.pad(inpaint_mask, [[0, 0], [int(W * 0.3), 0]], mode='constant',
-                                          constant_values=255)
-                if 'right' in outpaint_selections:
-                    inpaint_image = np.pad(inpaint_image, [[0, 0], [0, int(W * 0.3)], [0, 0]], mode='edge')
-                    inpaint_mask = np.pad(inpaint_mask, [[0, 0], [0, int(W * 0.3)]], mode='constant',
-                                          constant_values=255)
+                # H, W, C = inpaint_image.shape
+                # if 'left' in outpaint_selections:
+                #     inpaint_image = np.pad(inpaint_image, [[0, 0], [int(W * 0.3), 0], [0, 0]], mode='edge')
+                #     inpaint_mask = np.pad(inpaint_mask, [[0, 0], [int(W * 0.3), 0]], mode='constant',
+                #                           constant_values=255)
+                # if 'right' in outpaint_selections:
+                #     inpaint_image = np.pad(inpaint_image, [[0, 0], [0, int(W * 0.3)], [0, 0]], mode='edge')
+                #     inpaint_mask = np.pad(inpaint_mask, [[0, 0], [0, int(W * 0.3)]], mode='constant',
+                #                           constant_values=255)
 
-                inpaint_image = np.ascontiguousarray(inpaint_image.copy())
-                inpaint_mask = np.ascontiguousarray(inpaint_mask.copy())
-                inpaint_strength = 1.0
-                inpaint_respective_field = 1.0
+                # inpaint_image = np.ascontiguousarray(inpaint_image.copy())
+                # inpaint_mask = np.ascontiguousarray(inpaint_mask.copy())
+                # inpaint_strength = 1.0
+                # inpaint_respective_field = 1.0
 
             denoising_strength = inpaint_strength
 
@@ -690,15 +700,32 @@ def worker():
             final_height, final_width = inpaint_worker.current_task.image.shape[:2]
             print(f'Final resolution is {str((final_height, final_width))}, latent is {str((height, width))}.')
 
+        if 'op' in goals:
+            op_img = inpaint_image
+            op_img = resize_image(HWC3(op_img), width=width, height=height)
+
+            op_img = preprocessors.dwpose(op_img)
+
+            op_img = HWC3(op_img)
+            op_img = core.numpy_to_pytorch(op_img)
+            if debugging_cn_preprocessor:
+                yield_result(async_task, op_img, do_not_show_finished_images=True)
+                return
+
         if 'cn' in goals:
             for task in cn_tasks[flags.cn_canny]:
                 cn_img, cn_stop, cn_weight = task
+                cv2.imwrite("./log_cn1.png", cn_img)
+
                 cn_img = resize_image(HWC3(cn_img), width=width, height=height)
+                cv2.imwrite("./log_cn2.png", cn_img)
 
                 if not skipping_cn_preprocessor:
                     cn_img = preprocessors.canny_pyramid(cn_img, canny_low_threshold, canny_high_threshold)
 
+                cv2.imwrite("./log_cn3.png", cn_img)
                 cn_img = HWC3(cn_img)
+                cv2.imwrite("./log_cn4.png", cn_img)
                 task[0] = core.numpy_to_pytorch(cn_img)
                 if debugging_cn_preprocessor:
                     yield_result(async_task, cn_img, do_not_show_finished_images=True)
@@ -803,12 +830,27 @@ def worker():
                     ldm_patched.modules.model_management.interrupt_current_processing()
                 positive_cond, negative_cond = task['c'], task['uc']
 
+                if 'op' in goals:
+                    positive_cond, negative_cond = core.apply_controlnet(
+                        positive_cond, negative_cond,
+                        pipeline.loaded_ControlNets[controlnet_openpose_path], op_img, 0.5, 0, 1
+                    )
+
                 if 'cn' in goals:
                     for cn_flag, cn_path in [
                         (flags.cn_canny, controlnet_canny_path),
                         (flags.cn_cpds, controlnet_cpds_path)
                     ]:
+                        print("#"*50, cn_flag)
                         for cn_img, cn_stop, cn_weight in cn_tasks[cn_flag]:
+                            print("#"*50, "CN TASK")
+                            print(type(cn_img))
+                            print(cn_img.shape)
+                            try:
+                                cv2.imwrite("./log_cn0.png", core.pytorch_to_numpy(cn_img)[0])
+                            except Exception as e:
+                                print("#"*50, repr(e))
+                                pass
                             positive_cond, negative_cond = core.apply_controlnet(
                                 positive_cond, negative_cond,
                                 pipeline.loaded_ControlNets[cn_path], cn_img, cn_weight, 0, cn_stop)

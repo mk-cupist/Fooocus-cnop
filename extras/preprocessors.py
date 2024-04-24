@@ -1,6 +1,20 @@
 import cv2
 import numpy as np
 
+# from openpose import OpenposeDetector
+
+
+def dwpose(x: np.ndarray):
+    assert isinstance(x, np.ndarray)
+    assert x.ndim == 3 and x.shape[2] == 3
+
+    # detector = OpenposeDetector()
+
+    # y = detector(x, include_body=True, include_hand=True, use_dw_pose=True)
+    y = cv2.imread("./pose_test.png")
+    y = cv2.resize(y, dsize=(896, 1152))
+    return y
+
 
 def centered_canny(x: np.ndarray, canny_low_threshold, canny_high_threshold):
     assert isinstance(x, np.ndarray)

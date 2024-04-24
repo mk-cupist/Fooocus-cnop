@@ -536,6 +536,7 @@ with open(config_example_path, "w", encoding="utf-8") as json_file:
 model_filenames = []
 lora_filenames = []
 wildcard_filenames = []
+pose_model_filenames = []
 
 sdxl_lcm_lora = 'sdxl_lcm_lora.safetensors'
 sdxl_lightning_lora = 'sdxl_lightning_4step_lora.safetensors'
@@ -552,11 +553,12 @@ def get_model_filenames(folder_paths, extensions=None, name_filter=None):
 
 
 def update_files():
-    global model_filenames, lora_filenames, wildcard_filenames, available_presets
+    global model_filenames, lora_filenames, wildcard_filenames, available_presets, pose_model_filenames
     model_filenames = get_model_filenames(paths_checkpoints)
     lora_filenames = get_model_filenames(paths_loras)
     wildcard_filenames = get_files_from_folder(path_wildcards, ['.txt'])
     available_presets = get_presets()
+    pose_model_filenames = get_model_filenames([path_controlnet])
     return
 
 
@@ -631,6 +633,15 @@ def downloading_controlnet_cpds():
         file_name='fooocus_xl_cpds_128.safetensors'
     )
     return os.path.join(path_controlnet, 'fooocus_xl_cpds_128.safetensors')
+
+
+def downloading_controlnet_openpose():
+    load_file_from_url(
+        url='https://huggingface.co/thibaud/controlnet-openpose-sdxl-1.0/resolve/main/OpenPoseXL2.safetensors',
+        model_dir=path_controlnet,
+        file_name='OpenPoseXL2.safetensors'
+    )
+    return os.path.join(path_controlnet, 'OpenPoseXL2.safetensors')
 
 
 def downloading_ip_adapters(v):
